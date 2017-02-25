@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="comm.example.master.mapdemo.MainActivity">
+
+    <com.baidu.mapapi.map.MapView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:id="@+id/map_view" />
+    <ImageView
+        android:layout_width="40dp"
+        android:layout_height="50dp"
+        android:src="@mipmap/ic_launcher"
+        android:layout_centerInParent="true"/>
+    <comm.example.master.mapdemo.MyView
+        android:layout_width="match_parent"
+        android:layout_height="130dp"
+        android:id="@+id/linear_map"
+        android:visibility="gone"
+        android:orientation="vertical"
+        android:background="#e0000000">
+        <android.support.v4.view.ViewPager
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:id="@+id/vp_main"/>
+    </comm.example.master.mapdemo.MyView>
+</RelativeLayout>
