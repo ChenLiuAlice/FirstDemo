@@ -1,8 +1,14 @@
 package comm.example.master.mapdemo;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.graphics.Point;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
@@ -37,7 +43,9 @@ import com.baidu.mapapi.map.Marker;
 import com.baidu.mapapi.map.MarkerOptions;
 import com.baidu.mapapi.map.MyLocationConfiguration;
 import com.baidu.mapapi.map.MyLocationData;
+import com.baidu.mapapi.map.Overlay;
 import com.baidu.mapapi.map.OverlayOptions;
+import com.baidu.mapapi.map.UiSettings;
 import com.baidu.mapapi.model.LatLng;
 import com.baidu.mapapi.navi.BaiduMapNavigation;
 import com.baidu.mapapi.navi.NaviParaOption;
@@ -81,6 +89,14 @@ public class MainActivity extends AppCompatActivity implements RadarUploadInfoCa
     private MarkerOptions options2;
     private WalkingRouteOverlay overlay;
 
+    private SensorManager mSensorManager;
+    private Sensor accelerometer; // 加速度传感器
+    private Sensor magnetic; // 地磁场传感器
+    private float[] accelerometerValues = new float[3];
+    private float[] magneticFieldValues = new float[3];
+    private float orientation=0;
+    private MyLocationConfiguration config;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,6 +104,7 @@ public class MainActivity extends AppCompatActivity implements RadarUploadInfoCa
         SDKInitializer.initialize(getApplicationContext());
         setContentView(R.layout.activity_main);
         initView();
+        initSensorDirection();
         initData();
 
     }
@@ -101,12 +118,12 @@ public class MainActivity extends AppCompatActivity implements RadarUploadInfoCa
         MyLocationData locData = new MyLocationData.Builder()
                 .accuracy(1)
                 // 此处设置开发者获取到的方向信息，顺时针0-360
-                .direction(100).latitude(point.latitude)
+                .direction(orientation).latitude(point.latitude)
                 .longitude(point.longitude).build();
         // 设置定位数据
         map.setMyLocationData(locData);
         // 设置定位图层的配置（定位模式，是否允许方向信息，用户自定义定位图标）
-        MyLocationConfiguration config = new MyLocationConfiguration(MyLocationConfiguration.LocationMode.COMPASS, true, null);
+        config = new MyLocationConfiguration(MyLocationConfiguration.LocationMode.COMPASS, true, null, Color.BLUE,Color.GREEN);
         map.setMyLocationConfigeration(config);
         BitmapDescriptor bitmapDescriptor=BitmapDescriptorFactory.fromView(LayoutInflater.from(getApplicationContext()).inflate(R.layout.iv_marker,null));
         options = new MarkerOptions().position(new LatLng(31.351559,121.376814)).title("中影国际影院").icon(bitmapDescriptor).zIndex(0).period(5).animateType(MarkerOptions.MarkerAnimateType.grow);
@@ -243,6 +260,17 @@ public class MainActivity extends AppCompatActivity implements RadarUploadInfoCa
 //        map.setOnMapStatusChangeListener(mClusterManager);
 
     }
+
+    private void initSensorDirection() {
+        // 实例化传感器管理者
+        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        // 初始化加速度传感器
+        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        // 初始化地磁场传感器
+        magnetic = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        calculateOrientation();
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -254,12 +282,17 @@ public class MainActivity extends AppCompatActivity implements RadarUploadInfoCa
         super.onResume();
         //在activity执行onResume时执行mMapView. onResume ()，实现地图生命周期管理
         mapView.onResume();
+        // 注册监听
+        mSensorManager.registerListener(new MySensorEventListener(), accelerometer, Sensor.TYPE_ACCELEROMETER);
+        mSensorManager.registerListener(new MySensorEventListener(), magnetic, Sensor.TYPE_MAGNETIC_FIELD);
     }
     @Override
     protected void onPause() {
         super.onPause();
         //在activity执行onPause时执行mMapView. onPause ()，实现地图生命周期管理
         mapView.onPause();
+        // 解除注册
+        mSensorManager.unregisterListener(new MySensorEventListener());
     }
 
     @Override
@@ -365,5 +398,56 @@ public class MainActivity extends AppCompatActivity implements RadarUploadInfoCa
         }
     }
 
+    private float calculateOrientation() {
+        float[] values = new float[3];
+        float[] R = new float[9];
+        SensorManager.getRotationMatrix(R, null, accelerometerValues, magneticFieldValues);
+        SensorManager.getOrientation(R, values);
+        values[0] = (float) Math.toDegrees(values[0]);
+        Log.e(TAG, "toDegrees:"+values[0]);
+        if (values[0] >= -5 && values[0] < 5) {
+           // 正北
+        } else if (values[0] >= 5 && values[0] < 85) {
+            //东北
+        } else if (values[0] >= 85 && values[0] <= 95) {
+            //正东
+        } else if (values[0] >= 95 && values[0] < 175) {
+            // 东南
+        } else if ((values[0] >= 175 && values[0] <= 180)
+                || (values[0]) >= -180 && values[0] < -175) {
+            // Log.i(TAG, "正南");
+        } else if (values[0] >= -175 && values[0] < -95) {
+            // Log.i(TAG, "西南");
+        } else if (values[0] >= -95 && values[0] < -85) {
+            // Log.i(TAG, "正西");
+        } else if (values[0] >= -85 && values[0] < -5) {
+            // Log.i(TAG, "西北");
+        }
+        if (values[0]<0){
+            values[0]=360+values[0];
+        }
+        return values[0];
+    }
+    class MySensorEventListener implements SensorEventListener {
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            // TODO Auto-generated method stub
+            if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+                accelerometerValues = event.values;
+            }
+            if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+                magneticFieldValues = event.values;
+            }
+            orientation = calculateOrientation();
+            Log.e(TAG, "onSensorChanged: orientation:"+orientation);
+            mapView.refreshDrawableState();
+        }
 
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            // TODO Auto-generated method stub
+
+        }
+
+    }
 }
